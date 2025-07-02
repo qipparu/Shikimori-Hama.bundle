@@ -1,3 +1,5 @@
+# --- START OF FILE __init__.py (С ИНТЕГРАЦИЕЙ SHIKIMORI ЧЕРЕЗ ПОДМЕНУ) ---
+
 # -*- coding: utf-8 -*-
 #
 # To Do
@@ -10,7 +12,7 @@ import re
 import os
 import datetime
 
-# HAMA Modules #
+# Hama Modules #
 import common            # Functions: GetPlexLibraries, write_logs, UpdateMeta                   Variables: PlexRoot, FieldListMovies, FieldListSeries, FieldListEpisodes, DefaultPrefs, SourceList
 from common import Dict
 import AnimeLists        # Functions: GetMetadata, GetAniDBTVDBMap, GetAniDBMovieSets            Variables: AniDBMovieSets
@@ -23,6 +25,7 @@ import Plex              # Functions: GetMetadata                               
 import TVTunes           # Functions: GetMetadata                                                Variables: None
 import OMDb              # Functions: GetMetadata                                                Variables: None
 import MyAnimeList       # Functions: GetMetadata                                                Variables: None
+import Shikimori         # Functions: GetMetadata (модифицировано для подмены)                  Variables: None
 import AniList           # Functions: GetMetadata                                                Variables: None
 import Local             # Functions: GetMetadata                                                Variables: None
 import anidb34           # Functions: AdjustMapping                                              Variables: None
@@ -36,7 +39,7 @@ def ValidatePrefs():
 
   #Reset to default agent setting
   Prefs['reset_to_defaults']  #avoid logs message on first accesslike: 'Loaded preferences from DefaultPrefs.json' + 'Loaded the user preferences for com.plexapp.agents.lambda'
-  filename_xml  = os.path.join(common.PlexRoot, 'Plug-in Support', 'Preferences', 'com.plexapp.agents.hama.xml')
+  filename_xml  = os.path.join(common.PlexRoot, 'Plug-in Support', 'Preferences', 'com.plexapp.agents.Hama.xml')
   filename_json = os.path.join(common.PlexRoot, 'Plug-ins', 'Hama.bundle', 'Contents', 'DefaultPrefs.json')
   Log.Info ("[?] agent settings json file: '{}'".format(os.path.relpath(filename_json, common.PlexRoot)))
   Log.Info ("[?] agent settings xml prefs: '{}'".format(os.path.relpath(filename_xml , common.PlexRoot)))
@@ -65,7 +68,7 @@ def ValidatePrefs():
       for entry in PrefsFieldList:
         if entry not in Pref_list:
           Log.Info("Prefs[{key:<{width}}] does not exist".format(key=entry, width=max(map(len, PrefsFieldList))))
-  #Plex Media Server\Plug-in Support\Preferences\com.plexapp.agents.hama.xml
+  #Plex Media Server\Plug-in Support\Preferences\com.plexapp.agents.Hama.xml
   Log.Info("".ljust(157, '='))
   return MessageContainer('Success', "DefaultPrefs.json valid")
 
@@ -143,8 +146,16 @@ def Update(metadata, media, lang, force, movie):
   dict_FanartTV                                                 =    FanartTV.GetMetadata(       movie,                                   TVDBid, TMDbid, IMDbid)
   dict_Plex                                                     =        Plex.GetMetadata(metadata, error_log, TVDBid, Dict(dict_TheTVDB, 'title'))
   dict_TVTunes                                                  =     TVTunes.GetMetadata(metadata, Dict(dict_TheTVDB, 'title'), Dict(mappingList, AniDBid, 'name'))  #Sources[m:eval('dict_'+m)]
-  dict_OMDb                                                     =        OMDb.GetMetadata(movie, IMDbid)  #TVDBid=='hentai'
+  dict_OMDb                                                     =        OMDb.GetMetadata(movie, IMDbid)
   dict_MyAnimeList, MainMALid                                   = MyAnimeList.GetMetadata(MALids, "movie" if movie else "tv", dict_AniDB)
+  
+  ### ИНТЕГРАЦИЯ SHIKIMORI ###
+  # Вызываем функцию подмены, передав ей AniDB ID и основной словарь от AniDB
+  # Функция сама получит MAL ID через ARM API
+  if AniDBid:
+      Shikimori.OverrideMetadata(anidb_id=AniDBid, anidb_dict=dict_AniDB)
+  ### КОНЕЦ ИНТЕГРАЦИИ SHIKIMORI ###
+
   dict_AniList                                                  =     AniList.GetMetadata(AniDBid, MainMALid)
   dict_Local                                                    =       Local.GetMetadata(media, movie)
   if anidb34.AdjustMapping(source, mappingList, dict_AniDB, dict_TheTVDB, dict_FanartTV):
@@ -152,6 +163,8 @@ def Update(metadata, media, lang, force, movie):
   Log.Info('=== Update() ==='.ljust(157, '='))
   Log.Info("AniDBid: '{}', TVDBid: '{}', TMDbid: '{}', IMDbid: '{}', ANNid:'{}', MALid: '{}'".format(AniDBid, TVDBid, TMDbid, IMDbid, ANNid, MainMALid))
   common.write_logs(media, movie, error_log, source, AniDBid, TVDBid)
+  
+  # Убедимся, что Shikimori не передается в UpdateMeta, т.к. мы уже изменили dict_AniDB
   common.UpdateMeta(metadata, media, movie, {'AnimeLists': dict_AnimeLists, 'AniDB':       dict_AniDB,       'TheTVDB': dict_TheTVDB, 'TheMovieDb': dict_TheMovieDb, 
                                              'FanartTV':   dict_FanartTV,   'tvdb4':       dict_tvdb4,       'Plex':    dict_Plex,    'TVTunes':    dict_TVTunes, 
                                              'OMDb':       dict_OMDb,       'Local':       dict_Local,       'AniList': dict_AniList, 'MyAnimeList': dict_MyAnimeList}, mappingList)
@@ -170,3 +183,5 @@ class HamaMovieAgent(Agent.Movies):
   languages = [Locale.Language.English, 'fr', 'zh', 'sv', 'no', 'da', 'fi', 'nl', 'de', 'it', 'es', 'pl', 'hu', 'el', 'tr', 'ru', 'he', 'ja', 'pt', 'cs', 'ko', 'sl', 'hr']
   def search (self, results,  media, lang, manual):  Search (results,  media, lang, manual, True)
   def update (self, metadata, media, lang, force ):  Update (metadata, media, lang, force,  True)
+
+# --- END OF FILE __init__.py ---
